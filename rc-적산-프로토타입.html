@@ -1,0 +1,2335 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RC 골조 적산 프로그램 - 프로토타입</title>
+  <!-- 구글 폰트 적용 (Outfit & Inter) -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <!-- Excel 내보내기를 위한 SheetJS (XLSX) 라이브러리 탑재 -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  
+  <style>
+    /* ────────────────────────────────────────────────────────
+       1. 디자인 시스템 토큰 & Reset
+       ──────────────────────────────────────────────────────── */
+    :root {
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-title: 'Outfit', 'Inter', sans-serif;
+      --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+      /* 다크 스레이트 테마 색상 정의 */
+      --bg-app: #090d16;
+      --bg-card: #111827;
+      --bg-input: #1f2937;
+      --border-color: #374151;
+      --border-hover: #4b5563;
+      --text-main: #f3f4f6;
+      --text-muted: #9ca3af;
+      --text-dim: #6b7280;
+
+      /* 주요 강조 색상 (Curated Palette) */
+      --primary: #3b82f6;
+      --primary-hover: #2563eb;
+      --primary-glow: rgba(59, 130, 246, 0.15);
+      
+      --accent-conc: #3b82f6;
+      --accent-form: #6366f1;
+      --accent-rebar: #f59e0b;
+
+      /* 부재별 색상 매핑 */
+      --color-column: #2563eb;
+      --color-beam: #4f46e5;
+      --color-slab: #0d9488;
+      --color-wall: #0891b2;
+      --color-footing: #4b5563;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background-color: var(--bg-app);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      padding-bottom: 2rem;
+    }
+
+    input, select, button {
+      font-family: inherit;
+      color: inherit;
+    }
+
+    /* 스크롤바 디자인 */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: var(--bg-app);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--border-color);
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: var(--border-hover);
+    }
+
+    /* ────────────────────────────────────────────────────────
+       2. 레이아웃 & 공통 컴포넌트
+       ──────────────────────────────────────────────────────── */
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 0 1.25rem;
+    }
+
+    header {
+      background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+      border-bottom: 4px solid var(--primary-hover);
+      padding: 1.5rem 0;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    }
+
+    header .header-content {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 1.5rem;
+    }
+
+    .brand-title {
+      font-family: var(--font-title);
+      font-size: 1.5rem;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      background: linear-gradient(to right, #60a5fa, #a5b4fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-subtitle {
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: var(--text-muted);
+      margin-bottom: 0.25rem;
+      font-weight: 600;
+    }
+
+    /* 할증률 컨트롤러 */
+    .settings-panel {
+      display: flex;
+      align-items: flex-end;
+      gap: 1rem;
+      flex-wrap: wrap;
+    }
+
+    .setting-item {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .setting-label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+
+    .setting-input-wrapper {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .setting-input {
+      width: 4.5rem;
+      background-color: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 0.4rem 1.25rem 0.4rem 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.875rem;
+      text-align: right;
+      transition: all 0.2s;
+    }
+
+    .setting-input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25);
+    }
+
+    .setting-unit {
+      position: absolute;
+      right: 0.45rem;
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      pointer-events: none;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-decoration: none;
+    }
+
+    .btn-primary {
+      background-color: var(--primary);
+      color: #ffffff;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--primary-hover);
+      box-shadow: 0 0 12px rgba(59, 130, 246, 0.4);
+    }
+
+    .btn-secondary {
+      background-color: var(--bg-input);
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+    }
+
+    .btn-secondary:hover {
+      background-color: var(--border-color);
+      border-color: var(--border-hover);
+    }
+
+    .btn-outline {
+      background-color: transparent;
+      border: 1px solid var(--border-color);
+      color: var(--text-main);
+    }
+
+    .btn-outline:hover {
+      background-color: rgba(255, 255, 255, 0.05);
+      border-color: var(--border-hover);
+    }
+
+    .btn-danger-outline {
+      background-color: transparent;
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #ef4444;
+    }
+
+    .btn-danger-outline:hover {
+      background-color: rgba(239, 68, 68, 0.1);
+      border-color: #ef4444;
+    }
+
+    .btn-sm {
+      padding: 0.25rem 0.5rem;
+      font-size: 0.75rem;
+      border-radius: 4px;
+    }
+
+    /* 메인 대시보드 레이아웃 */
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 1.5rem;
+    }
+
+    @media (min-width: 1024px) {
+      .dashboard-grid {
+        grid-template-columns: 360px 1fr;
+      }
+    }
+
+    /* 카드 스타일 */
+    .card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: rgba(255, 255, 255, 0.02);
+    }
+
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .card-body {
+      padding: 1.25rem;
+    }
+
+    /* ────────────────────────────────────────────────────────
+       3. 왼쪽 부재 입력 폼 스타일
+       ──────────────────────────────────────────────────────── */
+    .type-selector-tabs {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 0.25rem;
+      margin-bottom: 1.25rem;
+      background-color: rgba(0, 0, 0, 0.2);
+      padding: 0.25rem;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+    }
+
+    .type-tab-btn {
+      background: none;
+      border: none;
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 0.5rem 0.25rem;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.15s;
+      text-align: center;
+      color: var(--text-muted);
+    }
+
+    .type-tab-btn:hover {
+      color: var(--text-main);
+      background-color: rgba(255, 255, 255, 0.03);
+    }
+
+    .type-tab-btn.active {
+      color: #ffffff;
+    }
+
+    .type-tab-btn.active[data-type="column"] { background-color: var(--color-column); }
+    .type-tab-btn.active[data-type="beam"] { background-color: var(--color-beam); }
+    .type-tab-btn.active[data-type="slab"] { background-color: var(--color-slab); }
+    .type-tab-btn.active[data-type="wall"] { background-color: var(--color-wall); }
+    .type-tab-btn.active[data-type="footing"] { background-color: var(--color-footing); }
+
+    .form-group-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.85rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .form-group-full {
+      grid-column: span 2;
+    }
+
+    .form-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+    }
+
+    .form-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+
+    .form-control {
+      width: 100%;
+      background-color: var(--bg-input);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.875rem;
+      transition: all 0.2s;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+    }
+
+    .form-control-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      cursor: pointer;
+      user-select: none;
+      font-size: 0.875rem;
+      padding: 0.25rem 0;
+    }
+
+    .form-control-checkbox input {
+      width: 1.1rem;
+      height: 1.1rem;
+      accent-color: var(--primary);
+      cursor: pointer;
+    }
+
+    .form-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .form-actions button {
+      flex: 1;
+    }
+
+    .form-note {
+      font-size: 0.7rem;
+      color: var(--text-dim);
+      margin-top: 1rem;
+      line-height: 1.4;
+    }
+
+    /* ────────────────────────────────────────────────────────
+       4. 오른쪽 데이터 대시보드 및 리스트
+       ──────────────────────────────────────────────────────── */
+    .dashboard-main {
+      display: flex;
+      flex-direction: column;
+      gap: 1.5rem;
+    }
+
+    /* 총계 대시보드 카드 */
+    .totals-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+    }
+
+    .total-card {
+      background-color: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      padding: 1.25rem;
+      position: relative;
+      overflow: hidden;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+    }
+
+    .total-card::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 4px;
+      height: 100%;
+    }
+
+    .total-card.conc::before { background-color: var(--accent-conc); }
+    .total-card.form::before { background-color: var(--accent-form); }
+    .total-card.rebar::before { background-color: var(--accent-rebar); }
+
+    .total-card-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 0.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .total-card-value {
+      font-family: var(--font-title);
+      font-size: 1.5rem;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    @media (min-width: 640px) {
+      .total-card-value { font-size: 2rem; }
+    }
+
+    .total-card.conc .total-card-value { color: #60a5fa; }
+    .total-card.form .total-card-value { color: #818cf8; }
+    .total-card.rebar .total-card-value { color: #fbbf24; }
+
+    .total-card-unit {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-top: 0.25rem;
+      font-weight: 500;
+    }
+
+    .total-card-badge {
+      font-size: 0.65rem;
+      background-color: rgba(255, 255, 255, 0.05);
+      padding: 0.15rem 0.35rem;
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      font-weight: normal;
+    }
+
+    /* 테이블 스타일 */
+    .table-container {
+      overflow-x: auto;
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      background-color: rgba(0, 0, 0, 0.1);
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.875rem;
+    }
+
+    th {
+      background-color: rgba(255, 255, 255, 0.02);
+      border-bottom: 1px solid var(--border-color);
+      color: var(--text-muted);
+      font-weight: 600;
+      padding: 0.75rem 1rem;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    td {
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    }
+
+    .row-member {
+      cursor: pointer;
+      transition: background-color 0.15s;
+    }
+
+    .row-member:hover {
+      background-color: rgba(59, 130, 246, 0.04);
+    }
+
+    .member-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 1.5rem;
+      height: 1.5rem;
+      font-size: 0.75rem;
+      font-weight: 800;
+      color: #ffffff;
+      border-radius: 4px;
+      margin-right: 0.5rem;
+      font-family: var(--font-title);
+    }
+
+    .badge-column { background-color: var(--color-column); }
+    .badge-beam { background-color: var(--color-beam); }
+    .badge-slab { background-color: var(--color-slab); }
+    .badge-wall { background-color: var(--color-wall); }
+    .badge-footing { background-color: var(--color-footing); }
+
+    .member-name-wrap {
+      display: flex;
+      align-items: center;
+    }
+
+    .member-name {
+      font-weight: 600;
+    }
+
+    .member-count {
+      font-size: 0.75rem;
+      color: var(--text-dim);
+      margin-left: 0.35rem;
+      font-weight: 500;
+    }
+
+    .font-num {
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      text-align: right;
+    }
+
+    .td-actions {
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    /* 확장 영역 (산출근거) */
+    .row-basis {
+      background-color: rgba(0, 0, 0, 0.25);
+    }
+
+    .row-basis-content {
+      padding: 1rem 1.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      color: #93c5fd;
+      line-height: 1.6;
+      border-left: 3px solid var(--primary);
+    }
+
+    .basis-item {
+      display: flex;
+      margin-bottom: 0.25rem;
+    }
+    
+    .basis-item::before {
+      content: '•';
+      margin-right: 0.5rem;
+      color: var(--primary);
+    }
+
+    /* 집계 탭 메뉴 */
+    .summary-tabs {
+      display: flex;
+      border-bottom: 1px solid var(--border-color);
+      margin-bottom: 1rem;
+    }
+
+    .sum-tab-btn {
+      background: none;
+      border: none;
+      padding: 0.75rem 1.25rem;
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      border-bottom: 2px solid transparent;
+      margin-bottom: -1px;
+      transition: all 0.15s;
+    }
+
+    .sum-tab-btn:hover {
+      color: var(--text-main);
+    }
+
+    .sum-tab-btn.active {
+      color: var(--primary);
+      border-bottom-color: var(--primary);
+    }
+
+    .summary-table-wrap {
+      border-radius: 8px;
+      border: 1px solid var(--border-color);
+      overflow: hidden;
+    }
+
+    .total-row-highlight {
+      background-color: rgba(255, 255, 255, 0.03);
+      font-weight: 700;
+      border-top: 2px solid var(--border-color);
+    }
+
+    .text-center {
+      text-align: center;
+    }
+    
+    .text-right {
+      text-align: right;
+    }
+
+    /* 수정 모드 활성화 상태 표시 */
+    .editing-banner {
+      background-color: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      border-radius: 6px;
+      padding: 0.5rem;
+      margin-bottom: 1rem;
+      font-size: 0.8rem;
+      color: #fbbf24;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
+    /* ────────────────────────────────────────────────────────
+       5. DXF CAD 연동 관련 신규 UI 스타일
+       ──────────────────────────────────────────────────────── */
+    .dxf-drop-zone {
+      border: 2px dashed var(--border-color);
+      border-radius: 8px;
+      padding: 1.5rem 1rem;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      background-color: rgba(255, 255, 255, 0.01);
+    }
+
+    .dxf-drop-zone:hover, .dxf-drop-zone.dragover {
+      border-color: var(--primary);
+      background-color: rgba(59, 130, 246, 0.04);
+    }
+
+    .dxf-mapping-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.3rem 0.5rem;
+      background-color: rgba(255, 255, 255, 0.02);
+      border-radius: 4px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+
+    .dxf-mapping-layer-name {
+      font-size: 0.72rem;
+      font-family: var(--font-mono);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .dxf-mapping-select {
+      background-color: var(--bg-app);
+      border: 1px solid var(--border-color);
+      border-radius: 4px;
+      padding: 0.2rem;
+      font-size: 0.72rem;
+      outline: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 헤더 영역 -->
+  <header>
+    <div class="container header-content">
+      <div>
+        <div class="brand-subtitle">Quantity Take-Off · Engine</div>
+        <div class="brand-title">RC 골조 적산 프로그램</div>
+      </div>
+      
+      <!-- 할증률 및 파일 출력 -->
+      <div class="settings-panel">
+        <div class="setting-item">
+          <label class="setting-label" for="waste-conc">콘크리트 할증</label>
+          <div class="setting-input-wrapper">
+            <input type="number" id="waste-conc" class="setting-input" value="0" step="0.5" min="0">
+            <span class="setting-unit">%</span>
+          </div>
+        </div>
+        <div class="setting-item">
+          <label class="setting-label" for="waste-form">거푸집 할증</label>
+          <div class="setting-input-wrapper">
+            <input type="number" id="waste-form" class="setting-input" value="0" step="0.5" min="0">
+            <span class="setting-unit">%</span>
+          </div>
+        </div>
+        <div class="setting-item">
+          <label class="setting-label" for="waste-rebar">철근 할증</label>
+          <div class="setting-input-wrapper">
+            <input type="number" id="waste-rebar" class="setting-input" value="3" step="0.5" min="0">
+            <span class="setting-unit">%</span>
+          </div>
+        </div>
+        
+        <button id="btn-export" class="btn btn-primary">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+          Excel 다운로드
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 메인 본문 -->
+  <main class="container">
+    <div class="dashboard-grid">
+      
+      <!-- ── 왼쪽: 부재 입력/수정 폼 & DXF 로드 패널 ── -->
+      <div>
+        <!-- 부재 수동 입력 카드 -->
+        <section class="card">
+          <div class="card-header">
+            <div class="card-title" id="form-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+              부재 수동 입력
+            </div>
+          </div>
+          <div class="card-body">
+            <!-- 부재 유형 탭 선택기 -->
+            <div class="type-selector-tabs" id="type-selector">
+              <button class="type-tab-btn active" data-type="column">기둥</button>
+              <button class="type-tab-btn" data-type="beam">보</button>
+              <button class="type-tab-btn" data-type="slab">슬래브</button>
+              <button class="type-tab-btn" data-type="wall">벽체</button>
+              <button class="type-tab-btn" data-type="footing">기초</button>
+            </div>
+
+            <!-- 수정 상태 배너 -->
+            <div class="editing-banner hidden" id="edit-banner">
+              <span>부재 정보를 수정 중입니다.</span>
+              <button class="btn btn-sm btn-outline" id="btn-cancel-edit" style="padding: 0.15rem 0.4rem;">취소</button>
+            </div>
+
+            <!-- 공통 입력 필드 (이름, 층) -->
+            <div class="form-group-grid">
+              <div class="form-field">
+                <label class="form-label" for="field-name">부재명</label>
+                <input type="text" id="field-name" class="form-control" placeholder="예: C1">
+              </div>
+              <div class="form-field">
+                <label class="form-label" for="field-floor">층</label>
+                <input type="text" id="field-floor" class="form-control" placeholder="예: 1F">
+              </div>
+            </div>
+
+            <!-- 동적 렌더링될 입력 필드 그룹 -->
+            <div class="form-group-grid" id="dynamic-fields-container">
+              <!-- JS가 채워 넣음 -->
+            </div>
+
+            <!-- 등록/저장 액션 -->
+            <div class="form-actions">
+              <button id="btn-submit" class="btn btn-primary">부재 추가</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- DXF 도면 분석 (CAD 연동) 카드 -->
+        <section class="card" style="margin-top: 1.5rem;">
+          <div class="card-header">
+            <div class="card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path><polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline><line x1="12" y1="22.08" x2="12" y2="12"></line></svg>
+              DXF 도면 분석 (CAD 연동)
+            </div>
+          </div>
+          <div class="card-body">
+            <!-- 파일 드롭존 -->
+            <div class="dxf-drop-zone" id="dxf-drop-zone">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-bottom: 0.5rem; color: var(--text-muted);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              <div style="font-size: 0.8rem; font-weight: 600;">DXF 파일을 여기에 드래그하거나 선택하세요</div>
+              <div style="font-size: 0.7rem; color: var(--text-dim); margin-top: 0.25rem;">지원 포맷: *.dxf (ASCII 텍스트 파일)</div>
+              <input type="file" id="dxf-file-input" accept=".dxf" style="display: none;">
+            </div>
+
+            <!-- 데모용 테스트 데이터 버튼 -->
+            <button id="btn-demo-dxf" class="btn btn-outline btn-sm" style="width: 100%; margin-top: 0.75rem; justify-content: center; gap: 0.35rem;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 12H3m18-6H3m18 12H3"></path></svg>
+              샘플 DXF 자동 분석 테스트 (시뮬레이터)
+            </button>
+
+            <!-- 1단계: 레이어 구성 요약 및 매핑 -->
+            <div id="dxf-summary-section" class="hidden" style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+              <div style="font-size: 0.8rem; font-weight: 700; margin-bottom: 0.5rem; color: #60a5fa;">도면 레이어 분석 완료</div>
+              
+              <div style="font-size: 0.75rem; color: var(--text-muted); display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem 0.5rem; margin-bottom: 0.75rem; background-color: rgba(0,0,0,0.2); padding: 0.5rem; border-radius: 6px;">
+                <div>검출 레이어: <span id="dxf-layer-count" style="font-family: var(--font-mono); font-weight:600; color: #fff;">0</span>개</div>
+                <div>총 도형 객체: <span id="dxf-entity-count" style="font-family: var(--font-mono); font-weight:600; color: #fff;">0</span>개</div>
+              </div>
+
+              <!-- 레이어 매핑 인터페이스 -->
+              <div style="font-size: 0.75rem; font-weight: 700; margin-bottom: 0.4rem;">도면 레이어 ↔ 부재 속성 매핑</div>
+              <div id="dxf-layer-mapping-container" style="max-height: 140px; overflow-y: auto; display: flex; flex-direction: column; gap: 0.35rem; margin-bottom: 1rem; padding-right: 0.25rem;">
+                <!-- JS가 채워 넣음 -->
+              </div>
+
+              <button id="btn-extract-dxf" class="btn btn-secondary btn-sm" style="width: 100%; justify-content: center; font-weight: 700;">
+                매핑 정보 기준 부재 파싱 실행
+              </button>
+            </div>
+
+            <!-- 2단계: 자동 검출된 부재 임시 결과 목록 -->
+            <div id="dxf-detected-section" class="hidden" style="margin-top: 1.25rem; border-top: 1px solid var(--border-color); padding-top: 1rem;">
+              <div style="font-size: 0.8rem; font-weight: 700; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center; color: #fbbf24;">
+                <span>자동 검출된 부재 목록</span>
+                <span style="font-size: 0.7rem; font-weight: normal; color: var(--text-dim);"><span id="dxf-detected-count">0</span>개 검출</span>
+              </div>
+              
+              <div style="overflow-x: auto; max-height: 180px; border: 1px solid var(--border-color); border-radius: 6px; margin-bottom: 0.75rem; background-color: rgba(0,0,0,0.25);">
+                <table style="font-size: 0.72rem; width: 100%;">
+                  <thead style="background-color: rgba(255,255,255,0.03);">
+                    <tr>
+                      <th style="padding: 0.4rem 0.5rem; width: 2.2rem; text-align: center;"><input type="checkbox" id="chk-all-detected" checked></th>
+                      <th style="padding: 0.4rem 0.5rem; text-align: left;">부재명</th>
+                      <th style="padding: 0.4rem 0.5rem; text-align: left;">종류</th>
+                      <th style="padding: 0.4rem 0.5rem; text-align: right;">산출 규격 요약</th>
+                    </tr>
+                  </thead>
+                  <tbody id="dxf-detected-tbody">
+                    <!-- JS가 채워 넣음 -->
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- 일괄 가져오기 버튼 -->
+              <button id="btn-import-detected" class="btn btn-primary btn-sm" style="width: 100%; justify-content: center; font-weight: 700;">
+                선택한 부재 적산 테이블에 추가
+              </button>
+            </div>
+
+          </div>
+        </section>
+      </div>
+
+      <!-- ── 오른쪽: 대시보드 메인 ── -->
+      <section class="dashboard-main">
+        
+        <!-- 실시간 총계 카드 (할증 적용됨) -->
+        <div class="totals-row">
+          <div class="total-card conc">
+            <div class="total-card-label">
+              콘크리트 <span class="total-card-badge">할증 포함</span>
+            </div>
+            <div class="total-card-value" id="tot-conc">0.00</div>
+            <div class="total-card-unit">㎥ (루베)</div>
+          </div>
+          
+          <div class="total-card form">
+            <div class="total-card-label">
+              거푸집 <span class="total-card-badge">할증 포함</span>
+            </div>
+            <div class="total-card-value" id="tot-form">0.00</div>
+            <div class="total-card-unit">㎡ (헤베)</div>
+          </div>
+          
+          <div class="total-card rebar">
+            <div class="total-card-label">
+              철근 <span class="total-card-badge">할증 포함</span>
+            </div>
+            <div class="total-card-value" id="tot-rebar">0.000</div>
+            <div class="total-card-unit">ton (톤)</div>
+          </div>
+        </div>
+
+        <!-- 부재 목록 테이블 -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>
+              부재 목록 <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal; margin-left: 0.5rem;">(행 선택 시 산식 상세)</span>
+            </div>
+          </div>
+          <div class="table-container">
+            <table id="members-table">
+              <thead>
+                <tr>
+                  <th>부재</th>
+                  <th>층</th>
+                  <th class="text-right">콘크리트(㎥)</th>
+                  <th class="text-right">거푸집(㎡)</th>
+                  <th class="text-right">철근(kg)</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody id="members-list-body">
+                <!-- JS가 채워 넣음 -->
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 집계표 분석 카드 -->
+        <div class="card">
+          <div class="summary-tabs">
+            <button class="sum-tab-btn active" data-tab="member">부재종류별</button>
+            <button class="sum-tab-btn" data-tab="floor">층별</button>
+            <button class="sum-tab-btn" data-tab="rebar">철근 규격별</button>
+          </div>
+          <div class="card-body" style="padding-top: 0;">
+            <div class="summary-table-wrap">
+              <table id="summary-table">
+                <!-- JS가 채워 넣음 -->
+              </table>
+            </div>
+          </div>
+        </div>
+
+      </section>
+
+    </div>
+  </main>
+
+  <script>
+    // ────────────────────────────────────────────────────────
+    // 1. 철근 규격 및 상수 데이터 정의
+    // ────────────────────────────────────────────────────────
+    const REBAR_W = {
+      D10: 0.56, D13: 0.995, D16: 1.56, D19: 2.25,
+      D22: 3.04, D25: 3.98, D29: 5.04, D32: 6.23
+    };
+    const DIAS = Object.keys(REBAR_W);
+
+    const TYPE_META = {
+      column: { label: "기둥", short: "C", colorClass: "badge-column" },
+      beam:   { label: "보",   short: "G", colorClass: "badge-beam" },
+      slab:   { label: "슬래브", short: "S", colorClass: "badge-slab" },
+      wall:   { label: "벽체", short: "W", colorClass: "badge-wall" },
+      footing:{ label: "기초", short: "F", colorClass: "badge-footing" }
+    };
+
+    const DEFAULTS = {
+      column: { name: "C1", floor: "1F", b: 500, h: 500, H: 3.3, count: 4, mainDia: "D22", mainN: 8, tieDia: "D10", tieSp: 200 },
+      beam:   { name: "G1", floor: "1F", b: 400, h: 600, L: 8.0, count: 4, topDia: "D22", topN: 4, botDia: "D22", botN: 3, stDia: "D10", stSp: 200 },
+      slab:   { name: "S1", floor: "1F", W: 8.0, L: 10.0, t: 150, count: 1, dia: "D13", sp: 200, doubleLayer: true },
+      wall:   { name: "W1", floor: "1F", L: 6.0, H: 3.3, t: 200, count: 2, vDia: "D13", vSp: 200, hDia: "D10", hSp: 250, doubleFace: true },
+      footing:{ name: "F1", floor: "기초", A: 2.0, B: 2.0, h: 600, count: 4, dia: "D16", sp: 150, doubleLayer: false }
+    };
+
+    const FIELDS = {
+      column: [
+        ["b", "단면 b (mm)", "number"], ["h", "단면 h (mm)", "number"], ["H", "높이 H (m)", "number"], ["count", "개수", "number"],
+        ["mainDia", "주근 규격", "dia"], ["mainN", "주근 본수", "number"],
+        ["tieDia", "띠철근 규격", "dia"], ["tieSp", "띠철근 간격 (mm)", "number"]
+      ],
+      beam: [
+        ["b", "폭 b (mm)", "number"], ["h", "춤 h (mm)", "number"], ["L", "길이 L (m)", "number"], ["count", "개수", "number"],
+        ["topDia", "상부근 규격", "dia"], ["topN", "상부근 본수", "number"],
+        ["botDia", "하부근 규격", "dia"], ["botN", "하부근 본수", "number"],
+        ["stDia", "스터럽 규격", "dia"], ["stSp", "스터럽 간격 (mm)", "number"]
+      ],
+      slab: [
+        ["W", "단변 W (m)", "number"], ["L", "장변 L (m)", "number"], ["t", "두께 t (mm)", "number"], ["count", "개수", "number"],
+        ["dia", "철근 규격", "dia"], ["sp", "간격 (mm)", "number"], ["doubleLayer", "상·하 2단 배근", "bool"]
+      ],
+      wall: [
+        ["L", "길이 L (m)", "number"], ["H", "높이 H (m)", "number"], ["t", "두께 t (mm)", "number"], ["count", "개수", "number"],
+        ["vDia", "수직근 규격", "dia"], ["vSp", "수직근 간격 (mm)", "number"],
+        ["hDia", "수평근 규격", "dia"], ["hSp", "수평근 간격 (mm)", "number"],
+        ["doubleFace", "복배근 (양면)", "bool"]
+      ],
+      footing: [
+        ["A", "가로 A (m)", "number"], ["B", "세로 B (m)", "number"], ["h", "두께 h (mm)", "number"], ["count", "개수", "number"],
+        ["dia", "철근 규격", "dia"], ["sp", "간격 (mm)", "number"], ["doubleLayer", "상·하 2단 배근", "bool"]
+      ]
+    };
+
+    // 포맷 함수 (세 자릿수 콤마, 소수점 자릿수)
+    const fmt = (n, d = 2) =>
+      Number(n).toLocaleString("ko-KR", { minimumFractionDigits: d, maximumFractionDigits: d });
+
+    // ────────────────────────────────────────────────────────
+    // 2. 부재별 물량 산출 공식 엔진
+    // ────────────────────────────────────────────────────────
+    function calc(m) {
+      const basis = { conc: "", form: "", rebar: [] };
+      let conc = 0, form = 0;
+      const rebar = {}; // { D13: kg, ... }
+      const add = (dia, kg, line) => {
+        rebar[dia] = (rebar[dia] || 0) + kg;
+        basis.rebar.push(line);
+      };
+
+      if (m.type === "column") {
+        const b = m.b / 1000, h = m.h / 1000;
+        conc = b * h * m.H * m.count;
+        form = 2 * (b + h) * m.H * m.count;
+        basis.conc = `${b} × ${h} × ${m.H}m × ${m.count}개 = ${fmt(conc)} ㎥`;
+        basis.form = `2 × (${b} + ${h}) × ${m.H}m × ${m.count}개 = ${fmt(form)} ㎡`;
+        const mainKg = m.H * m.mainN * m.count * REBAR_W[m.mainDia];
+        add(m.mainDia, mainKg, `주근 ${m.mainDia}: ${m.H}m × ${m.mainN}본 × ${m.count}개 × ${REBAR_W[m.mainDia]} kg/m = ${fmt(mainKg)} kg`);
+        const tieLen = 2 * (b + h);
+        const tieN = Math.floor((m.H * 1000) / m.tieSp) + 1;
+        const tieKg = tieLen * tieN * m.count * REBAR_W[m.tieDia];
+        add(m.tieDia, tieKg, `띠철근 ${m.tieDia}@${m.tieSp}: ${fmt(tieLen)}m × ${tieN}개 × ${m.count}개 × ${REBAR_W[m.tieDia]} kg/m = ${fmt(tieKg)} kg`);
+      }
+
+      if (m.type === "beam") {
+        const b = m.b / 1000, h = m.h / 1000;
+        conc = b * h * m.L * m.count;
+        form = (b + 2 * h) * m.L * m.count;
+        basis.conc = `${b} × ${h} × ${m.L}m × ${m.count}개 = ${fmt(conc)} ㎥`;
+        basis.form = `(${b} + 2 × ${h}) × ${m.L}m × ${m.count}개 = ${fmt(form)} ㎡ (바닥 + 양측면)`;
+        const topKg = m.L * m.topN * m.count * REBAR_W[m.topDia];
+        add(m.topDia, topKg, `상부근 ${m.topDia}: ${m.L}m × ${m.topN}본 × ${m.count}개 × ${REBAR_W[m.topDia]} kg/m = ${fmt(topKg)} kg`);
+        const botKg = m.L * m.botN * m.count * REBAR_W[m.botDia];
+        add(m.botDia, botKg, `하부근 ${m.botDia}: ${m.L}m × ${m.botN}본 × ${m.count}개 × ${REBAR_W[m.botDia]} kg/m = ${fmt(botKg)} kg`);
+        const stLen = 2 * (b + h);
+        const stN = Math.floor((m.L * 1000) / m.stSp) + 1;
+        const stKg = stLen * stN * m.count * REBAR_W[m.stDia];
+        add(m.stDia, stKg, `스터럽 ${m.stDia}@${m.stSp}: ${fmt(stLen)}m × ${stN}개 × ${m.count}개 × ${REBAR_W[m.stDia]} kg/m = ${fmt(stKg)} kg`);
+      }
+
+      if (m.type === "slab") {
+        const t = m.t / 1000, A = m.W * m.L;
+        conc = A * t * m.count;
+        form = A * m.count;
+        basis.conc = `${m.W} × ${m.L} × ${t}m × ${m.count}개 = ${fmt(conc)} ㎥`;
+        basis.form = `${m.W} × ${m.L}m × ${m.count}개 = ${fmt(form)} ㎡ (하부)`;
+        const nX = Math.floor((m.L * 1000) / m.sp) + 1;
+        const nY = Math.floor((m.W * 1000) / m.sp) + 1;
+        const layer = m.doubleLayer ? 2 : 1;
+        const len = (nX * m.W + nY * m.L) * layer * m.count;
+        const kg = len * REBAR_W[m.dia];
+        add(m.dia, kg, `양방향 ${m.dia}@${m.sp}${m.doubleLayer ? " 상·하 2단" : " 1단"}: (${nX}본 × ${m.W}m + ${nY}본 × ${m.L}m) × ${layer}단 × ${m.count}개 = ${fmt(len, 1)}m → ${fmt(kg)} kg`);
+      }
+
+      if (m.type === "wall") {
+        const t = m.t / 1000;
+        conc = m.L * m.H * t * m.count;
+        form = 2 * m.L * m.H * m.count;
+        basis.conc = `${m.L} × ${m.H} × ${t}m × ${m.count}개 = ${fmt(conc)} ㎥`;
+        basis.form = `2 × ${m.L} × ${m.H}m × ${m.count}개 = ${fmt(form)} ㎡ (양면)`;
+        const face = m.doubleFace ? 2 : 1;
+        const nV = Math.floor((m.L * 1000) / m.vSp) + 1;
+        const vKg = nV * m.H * face * m.count * REBAR_W[m.vDia];
+        add(m.vDia, vKg, `수직근 ${m.vDia}@${m.vSp} × ${face}면: ${nV}본 × ${m.H}m × ${face}면 × ${m.count}개 × ${REBAR_W[m.vDia]} kg/m = ${fmt(vKg)} kg`);
+        const nH = Math.floor((m.H * 1000) / m.hSp) + 1;
+        const hKg = nH * m.L * face * m.count * REBAR_W[m.hDia];
+        add(m.hDia, hKg, `수평근 ${m.hDia}@${m.hSp} × ${face}면: ${nH}본 × ${m.L}m × ${face}면 × ${m.count}개 × ${REBAR_W[m.hDia]} kg/m = ${fmt(hKg)} kg`);
+      }
+
+      if (m.type === "footing") {
+        const h = m.h / 1000;
+        conc = m.A * m.B * h * m.count;
+        form = 2 * (m.A + m.B) * h * m.count;
+        basis.conc = `${m.A} × ${m.B} × ${h}m × ${m.count}개 = ${fmt(conc)} ㎥`;
+        basis.form = `2 × (${m.A} + ${m.B}) × ${h}m × ${m.count}개 = ${fmt(form)} ㎡ (측면)`;
+        const nX = Math.floor((m.B * 1000) / m.sp) + 1;
+        const nY = Math.floor((m.A * 1000) / m.sp) + 1;
+        const layer = m.doubleLayer ? 2 : 1;
+        const len = (nX * m.A + nY * m.B) * layer * m.count;
+        const kg = len * REBAR_W[m.dia];
+        add(m.dia, kg, `양방향 ${m.dia}@${m.sp}${m.doubleLayer ? " 상·하 2단" : ""}: (${nX}본 × ${m.A}m + ${nY}본 × ${m.B}m) × ${layer}단 × ${m.count}개 = ${fmt(len, 1)}m → ${fmt(kg)} kg`);
+      }
+
+      const rebarTotal = Object.values(rebar).reduce((a, b) => a + b, 0);
+      return { conc, form, rebar, rebarTotal, basis };
+    }
+
+    // ────────────────────────────────────────────────────────
+    // 3. 글로벌 상태 (State) 정의
+    // ────────────────────────────────────────────────────────
+    let state = {
+      members: [
+        { id: 1, type: "footing", ...DEFAULTS.footing },
+        { id: 2, type: "column", ...DEFAULTS.column },
+        { id: 3, type: "beam", ...DEFAULTS.beam },
+        { id: 4, type: "slab", ...DEFAULTS.slab }
+      ],
+      formType: "column",
+      form: { ...DEFAULTS.column },
+      editId: null,
+      openRowId: null,
+      activeTab: "member", // member | floor | rebar
+      waste: { conc: 0, form: 0, rebar: 3 },
+      nextId: 100
+    };
+
+    // DXF 파서 결과를 저장할 임시 공간
+    let dxfParserInstance = null;
+    let parsedDetectedMembers = [];
+
+    // ────────────────────────────────────────────────────────
+    // 4. UI 렌더링 엔진 (Vanilla DOM updates)
+    // ────────────────────────────────────────────────────────
+    
+    // 할증률 계산 보조 함수
+    function withWaste(v, kind) {
+      return v * (1 + (Number(state.waste[kind]) || 0) / 100);
+    }
+
+    // 부재 폼 렌더러
+    function renderForm() {
+      const container = document.getElementById("dynamic-fields-container");
+      container.innerHTML = ""; // 기존 필드 제거
+
+      const fields = FIELDS[state.formType];
+      
+      // 먼저 부재명, 층 input 바인딩 동기화
+      document.getElementById("field-name").value = state.form.name || "";
+      document.getElementById("field-floor").value = state.form.floor || "";
+
+      // 동적 필드 생성
+      fields.forEach(([key, labelText, kind]) => {
+        const fieldDiv = document.createElement("div");
+        fieldDiv.className = "form-field";
+        if (kind === "bool") {
+          fieldDiv.classList.add("form-group-full");
+        }
+
+        if (kind === "bool") {
+          // 체크박스 형식
+          const label = document.createElement("label");
+          label.className = "form-control-checkbox";
+          
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.id = `field-${key}`;
+          checkbox.checked = !!state.form[key];
+          
+          // 체크박스 이벤트 리스너
+          checkbox.addEventListener("change", (e) => {
+            state.form[key] = e.target.checked;
+          });
+
+          label.appendChild(checkbox);
+          label.appendChild(document.createTextNode(" " + labelText));
+          fieldDiv.appendChild(label);
+        } else if (kind === "dia") {
+          // 셀렉트 박스 형식
+          const label = document.createElement("label");
+          label.className = "form-label";
+          label.textContent = labelText;
+          label.setAttribute("for", `field-${key}`);
+
+          const select = document.createElement("select");
+          select.className = "form-control";
+          select.id = `field-${key}`;
+          
+          DIAS.forEach(d => {
+            const opt = document.createElement("option");
+            opt.value = d;
+            opt.textContent = d;
+            if (state.form[key] === d) opt.selected = true;
+            select.appendChild(opt);
+          });
+
+          // 셀렉트 이벤트 리스너
+          select.addEventListener("change", (e) => {
+            state.form[key] = e.target.value;
+          });
+
+          fieldDiv.appendChild(label);
+          fieldDiv.appendChild(select);
+        } else {
+          // 숫자 입력 필드
+          const label = document.createElement("label");
+          label.className = "form-label";
+          label.textContent = labelText;
+          label.setAttribute("for", `field-${key}`);
+
+          const input = document.createElement("input");
+          input.type = "number";
+          input.className = "form-control";
+          input.id = `field-${key}`;
+          input.value = state.form[key] !== undefined ? state.form[key] : "";
+          input.step = "any";
+
+          // 숫자 이벤트 리스너
+          input.addEventListener("input", (e) => {
+            state.form[key] = e.target.value === "" ? "" : Number(e.target.value);
+          });
+
+          fieldDiv.appendChild(label);
+          fieldDiv.appendChild(input);
+        }
+
+        container.appendChild(fieldDiv);
+      });
+
+      // 버튼 및 타이틀 상태 수정
+      const btnSubmit = document.getElementById("btn-submit");
+      const formCardTitle = document.getElementById("form-card-title");
+      const editBanner = document.getElementById("edit-banner");
+
+      if (state.editId !== null) {
+        btnSubmit.textContent = "수정 저장";
+        btnSubmit.className = "btn btn-primary";
+        formCardTitle.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg> 부재 수정`;
+        editBanner.classList.remove("hidden");
+      } else {
+        btnSubmit.textContent = "부재 추가";
+        btnSubmit.className = "btn btn-primary";
+        formCardTitle.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg> 부재 수동 입력`;
+        editBanner.classList.add("hidden");
+      }
+    }
+
+    // 총계 대시보드 렌더러
+    function renderTotals() {
+      // 1. 계산
+      let concSum = 0;
+      let formSum = 0;
+      let rebarSum = 0;
+
+      state.members.forEach(m => {
+        const r = calc(m);
+        concSum += r.conc;
+        formSum += r.form;
+        rebarSum += r.rebarTotal;
+      });
+
+      // 2. 할증률 반영
+      const concWasted = withWaste(concSum, "conc");
+      const formWasted = withWaste(formSum, "form");
+      const rebarWasted = withWaste(rebarSum, "rebar") / 1000; // ton 단위 변환
+
+      // 3. UI 업데이트
+      document.getElementById("tot-conc").textContent = fmt(concWasted, 2);
+      document.getElementById("tot-form").textContent = fmt(formWasted, 2);
+      document.getElementById("tot-rebar").textContent = fmt(rebarWasted, 3);
+    }
+
+    // 부재 목록 렌더러
+    function renderList() {
+      const tbody = document.getElementById("members-list-body");
+      tbody.innerHTML = "";
+
+      if (state.members.length === 0) {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `<td colspan="6" class="text-center" style="padding: 2rem; color: var(--text-dim);">왼쪽에서 부재를 추가하거나 DXF를 분석해 가져오면 결과가 표시됩니다.</td>`;
+        tbody.appendChild(tr);
+        return;
+      }
+
+      state.members.forEach(m => {
+        const r = calc(m);
+        const meta = TYPE_META[m.type];
+
+        // 1. 메인 부재 정보 행
+        const trMember = document.createElement("tr");
+        trMember.className = "row-member";
+        trMember.dataset.id = m.id;
+        
+        // 클릭 시 상세 정보 토글
+        trMember.addEventListener("click", () => {
+          state.openRowId = state.openRowId === m.id ? null : m.id;
+          renderList();
+        });
+
+        trMember.innerHTML = `
+          <td>
+            <div class="member-name-wrap">
+              <span class="member-badge ${meta.colorClass}">${meta.short}</span>
+              <span class="member-name">${m.name}</span>
+              <span class="member-count">×${m.count}</span>
+            </div>
+          </td>
+          <td style="color: var(--text-muted);">${m.floor}</td>
+          <td class="font-num">${fmt(r.conc)}</td>
+          <td class="font-num">${fmt(r.form)}</td>
+          <td class="font-num">${fmt(r.rebarTotal, 1)}</td>
+          <td class="td-actions">
+            <button class="btn btn-secondary btn-sm btn-edit" data-id="${m.id}">수정</button>
+            <button class="btn btn-danger-outline btn-sm btn-delete" data-id="${m.id}">삭제</button>
+          </td>
+        `;
+
+        // 수정/삭제 버튼은 부모 tr의 클릭 이벤트를 전파하지 않음
+        trMember.querySelector(".btn-edit").addEventListener("click", (e) => {
+          e.stopPropagation();
+          startEdit(m);
+        });
+        trMember.querySelector(".btn-delete").addEventListener("click", (e) => {
+          e.stopPropagation();
+          removeMember(m.id);
+        });
+
+        tbody.appendChild(trMember);
+
+        // 2. 확장된 산출근거 행
+        if (state.openRowId === m.id) {
+          const trBasis = document.createElement("tr");
+          trBasis.className = "row-basis";
+          
+          let rebarBasisHtml = r.basis.rebar.map(line => `<div class="basis-item">${line}</div>`).join("");
+          
+          trBasis.innerHTML = `
+            <td colspan="6">
+              <div class="row-basis-content">
+                <div class="basis-item">콘크리트 = ${r.basis.conc}</div>
+                <div class="basis-item">거푸집 = ${r.basis.form}</div>
+                ${rebarBasisHtml}
+              </div>
+            </td>
+          `;
+          tbody.appendChild(trBasis);
+        }
+      });
+    }
+
+    // 집계표 렌더러
+    function renderSummary() {
+      const table = document.getElementById("summary-table");
+      table.innerHTML = "";
+
+      // 1. 순물량 집계 수행
+      let totalConc = 0;
+      let totalForm = 0;
+      let totalRebar = 0;
+
+      const byType = {};
+      const byFloor = {};
+      const byDia = {};
+
+      state.members.forEach(m => {
+        const r = calc(m);
+        totalConc += r.conc;
+        totalForm += r.form;
+        totalRebar += r.rebarTotal;
+
+        // 부재종류별 합산
+        if (!byType[m.type]) byType[m.type] = { conc: 0, form: 0, rebar: 0 };
+        byType[m.type].conc += r.conc;
+        byType[m.type].form += r.form;
+        byType[m.type].rebar += r.rebarTotal;
+
+        // 층별 합산
+        if (!byFloor[m.floor]) byFloor[m.floor] = { conc: 0, form: 0, rebar: 0 };
+        byFloor[m.floor].conc += r.conc;
+        byFloor[m.floor].form += r.form;
+        byFloor[m.floor].rebar += r.rebarTotal;
+
+        // 철근규격별 합산
+        Object.entries(r.rebar).forEach(([dia, kg]) => {
+          byDia[dia] = (byDia[dia] || 0) + kg;
+        });
+      });
+
+      // 2. 선택된 탭에 따른 테이블 본문 구성
+      if (state.activeTab === "member" || state.activeTab === "floor") {
+        // 부재종류별 또는 층별 집계
+        table.innerHTML = `
+          <thead>
+            <tr>
+              <th>${state.activeTab === "member" ? "부재종류" : "층"}</th>
+              <th class="text-right">콘크리트(㎥)</th>
+              <th class="text-right">거푸집(㎡)</th>
+              <th class="text-right">철근(kg)</th>
+            </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        `;
+        const tbody = table.querySelector("tbody");
+        const items = state.activeTab === "member" ? byType : byFloor;
+
+        Object.entries(items).forEach(([key, val]) => {
+          const label = state.activeTab === "member" ? TYPE_META[key].label : key;
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td style="font-weight: 600;">${label}</td>
+            <td class="font-num">${fmt(val.conc)}</td>
+            <td class="font-num">${fmt(val.form)}</td>
+            <td class="font-num">${fmt(val.rebar, 1)}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        // 합계 행 추가
+        const trTotal = document.createElement("tr");
+        trTotal.className = "total-row-highlight";
+        trTotal.innerHTML = `
+          <td>합계 (순물량)</td>
+          <td class="font-num">${fmt(totalConc)}</td>
+          <td class="font-num">${fmt(totalForm)}</td>
+          <td class="font-num">${fmt(totalRebar, 1)}</td>
+        `;
+        tbody.appendChild(trTotal);
+
+      } else {
+        // 철근 규격별 집계
+        table.innerHTML = `
+          <thead>
+            <tr>
+              <th>규격</th>
+              <th class="text-right">단위중량(kg/m)</th>
+              <th class="text-right">순물량(kg)</th>
+              <th class="text-right">할증 후(kg)</th>
+            </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        `;
+        const tbody = table.querySelector("tbody");
+        
+        // 정렬하여 렌더링
+        DIAS.forEach(d => {
+          const kg = byDia[d] || 0;
+          if (kg === 0) return; // 사용하지 않는 철근 규격은 제외
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td style="font-weight: 600; color: #fbbf24; font-family: var(--font-mono);">${d}</td>
+            <td class="font-num" style="color: var(--text-dim);">${REBAR_W[d]}</td>
+            <td class="font-num">${fmt(kg, 1)}</td>
+            <td class="font-num" style="color: #fbbf24; font-weight: 600;">${fmt(withWaste(kg, "rebar"), 1)}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+
+        // 철근 합계 행 추가
+        const trTotal = document.createElement("tr");
+        trTotal.className = "total-row-highlight";
+        trTotal.innerHTML = `
+          <td>합계</td>
+          <td></td>
+          <td class="font-num">${fmt(totalRebar, 1)}</td>
+          <td class="font-num" style="color: #fbbf24;">${fmt(withWaste(totalRebar, "rebar"), 1)}</td>
+        `;
+        tbody.appendChild(trTotal);
+      }
+    }
+
+    // 전체 화면 리렌더러
+    function render() {
+      renderForm();
+      renderTotals();
+      renderList();
+      renderSummary();
+    }
+
+    // ────────────────────────────────────────────────────────
+    // 5. 비즈니스 로직 및 이벤트 핸들러
+    // ────────────────────────────────────────────────────────
+    
+    // 부재 유형 변경
+    function switchType(type) {
+      state.formType = type;
+      state.form = { ...DEFAULTS[type] };
+      state.editId = null;
+      renderForm();
+    }
+
+    // 부재 수정 시작
+    function startEdit(member) {
+      state.formType = member.type;
+      state.form = { ...member };
+      state.editId = member.id;
+      
+      // 폼 상단 탭 활성화 상태 변경
+      document.querySelectorAll(".type-tab-btn").forEach(btn => {
+        if (btn.dataset.type === member.type) {
+          btn.classList.add("active");
+        } else {
+          btn.classList.remove("active");
+        }
+      });
+      
+      renderForm();
+      // 화면 왼쪽 폼 영역으로 부드럽게 스크롤
+      document.getElementById("form-card-title").scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // 부재 수정 취소
+    function cancelEdit() {
+      state.editId = null;
+      state.form = { ...DEFAULTS[state.formType] };
+      renderForm();
+    }
+
+    // 부재 삭제
+    function removeMember(id) {
+      state.members = state.members.filter(m => m.id !== id);
+      if (state.editId === id) {
+        cancelEdit();
+      }
+      render();
+    }
+
+    // 폼 검증 및 전송
+    function submitForm() {
+      const formNameInput = document.getElementById("field-name").value.trim();
+      const formFloorInput = document.getElementById("field-floor").value.trim();
+
+      const numeric = {};
+      const fields = FIELDS[state.formType];
+      
+      fields.forEach(([key, , kind]) => {
+        if (kind === "dia" || kind === "bool") {
+          numeric[key] = state.form[key];
+        } else {
+          // input 필드값에서 실시간 동기화된 값을 쓰되, 유효하지 않으면 0 처리
+          numeric[key] = Number(state.form[key]) || 0;
+        }
+      });
+
+      const member = {
+        type: state.formType,
+        name: formNameInput || TYPE_META[state.formType].label,
+        floor: formFloorInput || "-",
+        ...numeric
+      };
+
+      if (state.editId !== null) {
+        // 수정 모드
+        state.members = state.members.map(x => x.id === state.editId ? { ...member, id: state.editId } : x);
+        state.editId = null;
+      } else {
+        // 추가 모드
+        state.members.push({ ...member, id: state.nextId++ });
+      }
+
+      // 폼 초기화 및 새로고침
+      state.form = { ...DEFAULTS[state.formType] };
+      render();
+    }
+
+    // ────────────────────────────────────────────────────────
+    // 6. Excel 파일 생성 및 다운로드 (SheetJS 구현)
+    // ────────────────────────────────────────────────────────
+    function exportExcel() {
+      // 엑셀 워크북 오브젝트 생성
+      const wb = XLSX.utils.book_new();
+
+      // [Sheet 1]: 부재 목록 가공
+      const wsMembersData = [
+        ["RC 골조 적산 부재별 물량 산출서"],
+        [],
+        ["부재명", "부재종류", "층", "규격 상세 요약", "콘크리트 순물량 (㎥)", "거푸집 순물량 (㎡)", "철근 순물량 (kg)", "콘크리트 할증적용 (㎥)", "거푸집 할증적용 (㎡)", "철근 할증적용 (kg)"]
+      ];
+
+      state.members.forEach(m => {
+        const r = calc(m);
+        const meta = TYPE_META[m.type];
+
+        // 규격 간결 요약 문자열 작성
+        let spec = "";
+        if (m.type === "column") spec = `b:${m.b}, h:${m.h}, H:${m.H}, 주근:${m.mainDia}x${m.mainN}, 대근:${m.tieDia}@${m.tieSp}`;
+        else if (m.type === "beam") spec = `b:${m.b}, h:${m.h}, L:${m.L}, 상부:${m.topDia}x${m.topN}, 하부:${m.botDia}x${m.botN}, 늑근:${m.stDia}@${m.stSp}`;
+        else if (m.type === "slab") spec = `W:${m.W}, L:${m.L}, t:${m.t}, 철근:${m.dia}@${m.sp}, 배근:${m.doubleLayer ? "2단" : "1단"}`;
+        else if (m.type === "wall") spec = `L:${m.L}, H:${m.H}, t:${m.t}, 수직:${m.vDia}@${m.vSp}, 수평:${m.hDia}@${m.hSp}, 배근:${m.doubleFace ? "복배근" : "단배근"}`;
+        else if (m.type === "footing") spec = `A:${m.A}, B:${m.B}, h:${m.h}, 철근:${m.dia}@${m.sp}, 배근:${m.doubleLayer ? "2단" : "1단"}`;
+
+        wsMembersData.push([
+          m.name,
+          meta.label,
+          m.floor,
+          spec,
+          Number(r.conc.toFixed(4)),
+          Number(r.form.toFixed(4)),
+          Number(r.rebarTotal.toFixed(2)),
+          Number(withWaste(r.conc, "conc").toFixed(4)),
+          Number(withWaste(r.form, "form").toFixed(4)),
+          Number(withWaste(r.rebarTotal, "rebar").toFixed(2))
+        ]);
+      });
+
+      const wsMembers = XLSX.utils.aoa_to_sheet(wsMembersData);
+      XLSX.utils.book_append_sheet(wb, wsMembers, "부재별 적산 데이터");
+
+      // [Sheet 2]: 집계 요약
+      const wsSummaryData = [
+        ["RC 골조 적산 집계표 요약"],
+        [],
+        ["[1. 부재 종류별 집계]"],
+        ["부재종류", "콘크리트 순물량 (㎥)", "거푸집 순물량 (㎡)", "철근 순물량 (kg)", "콘크리트 할증반영 (㎥)", "거푸집 할증반영 (㎡)", "철근 할증반영 (kg)"]
+      ];
+
+      // 집계 통계 산출
+      let totalConc = 0, totalForm = 0, totalRebar = 0;
+      const byType = {};
+      const byFloor = {};
+      const byDia = {};
+
+      state.members.forEach(m => {
+        const r = calc(m);
+        totalConc += r.conc;
+        totalForm += r.form;
+        totalRebar += r.rebarTotal;
+
+        if (!byType[m.type]) byType[m.type] = { conc: 0, form: 0, rebar: 0 };
+        byType[m.type].conc += r.conc;
+        byType[m.type].form += r.form;
+        byType[m.type].rebar += r.rebarTotal;
+
+        if (!byFloor[m.floor]) byFloor[m.floor] = { conc: 0, form: 0, rebar: 0 };
+        byFloor[m.floor].conc += r.conc;
+        byFloor[m.floor].form += r.form;
+        byFloor[m.floor].rebar += r.rebarTotal;
+
+        Object.entries(r.rebar).forEach(([dia, kg]) => {
+          byDia[dia] = (byDia[dia] || 0) + kg;
+        });
+      });
+
+      Object.entries(byType).forEach(([type, val]) => {
+        wsSummaryData.push([
+          TYPE_META[type].label,
+          Number(val.conc.toFixed(3)),
+          Number(val.form.toFixed(3)),
+          Number(val.rebar.toFixed(1)),
+          Number(withWaste(val.conc, "conc").toFixed(3)),
+          Number(withWaste(val.form, "form").toFixed(3)),
+          Number(withWaste(val.rebar, "rebar").toFixed(1))
+        ]);
+      });
+
+      wsSummaryData.push([
+        "합계 (부재별)",
+        Number(totalConc.toFixed(3)),
+        Number(totalForm.toFixed(3)),
+        Number(totalRebar.toFixed(1)),
+        Number(withWaste(totalConc, "conc").toFixed(3)),
+        Number(withWaste(totalForm, "form").toFixed(3)),
+        Number(withWaste(totalRebar, "rebar").toFixed(1))
+      ]);
+
+      wsSummaryData.push([], []);
+      wsSummaryData.push(["[2. 층별 집계]"]);
+      wsSummaryData.push(["층", "콘크리트 순물량 (㎥)", "거푸집 순물량 (㎡)", "철근 순물량 (kg)", "콘크리트 할증반영 (㎥)", "거푸집 할증반영 (㎡)", "철근 할증반영 (kg)"]);
+
+      Object.entries(byFloor).forEach(([floor, val]) => {
+        wsSummaryData.push([
+          floor,
+          Number(val.conc.toFixed(3)),
+          Number(val.form.toFixed(3)),
+          Number(val.rebar.toFixed(1)),
+          Number(withWaste(val.conc, "conc").toFixed(3)),
+          Number(withWaste(val.form, "form").toFixed(3)),
+          Number(withWaste(val.rebar, "rebar").toFixed(1))
+        ]);
+      });
+
+      wsSummaryData.push([
+        "합계 (층별)",
+        Number(totalConc.toFixed(3)),
+        Number(totalForm.toFixed(3)),
+        Number(totalRebar.toFixed(1)),
+        Number(withWaste(totalConc, "conc").toFixed(3)),
+        Number(withWaste(totalForm, "form").toFixed(3)),
+        Number(withWaste(totalRebar, "rebar").toFixed(1))
+      ]);
+
+      wsSummaryData.push([], []);
+      wsSummaryData.push(["[3. 철근 규격별 상세 집계]"]);
+      wsSummaryData.push(["규격", "단위 중량 (kg/m)", "순물량 (kg)", "할증 반영 중량 (kg)", "할증 반영 중량 (ton)"]);
+
+      DIAS.forEach(d => {
+        const kg = byDia[d] || 0;
+        if (kg === 0) return;
+        wsSummaryData.push([
+          d,
+          REBAR_W[d],
+          Number(kg.toFixed(1)),
+          Number(withWaste(kg, "rebar").toFixed(1)),
+          Number((withWaste(kg, "rebar") / 1000).toFixed(4))
+        ]);
+      });
+
+      wsSummaryData.push([
+        "합계 (철근)",
+        "",
+        Number(totalRebar.toFixed(1)),
+        Number(withWaste(totalRebar, "rebar").toFixed(1)),
+        Number((withWaste(totalRebar, "rebar") / 1000).toFixed(4))
+      ]);
+
+      const wsSummary = XLSX.utils.aoa_to_sheet(wsSummaryData);
+      XLSX.utils.book_append_sheet(wb, wsSummary, "종합 집계표");
+
+      // 브라우저 엑셀 파일 다운로드 트리거
+      XLSX.writeFile(wb, "RC_골조_적산_산출결과.xlsx");
+    }
+
+    // ────────────────────────────────────────────────────────
+    // 7. DXF CAD Parser 로직
+    // ────────────────────────────────────────────────────────
+    class HeuristicDXFParser {
+      constructor() {
+        this.layers = {}; // { layerName: { lines: [], polylines: [], texts: [] } }
+        this.entityCount = 0;
+      }
+
+      parse(text) {
+        this.layers = {};
+        this.entityCount = 0;
+
+        const lines = text.split(/\r?\n/);
+        let currentEntity = null;
+        let currentLayer = "0";
+        let currentText = "";
+        let xValues = [];
+        let yValues = [];
+        let isClosed = false;
+
+        const self = this;
+        function saveEntity() {
+          if (!currentEntity) return;
+          self.entityCount++;
+
+          if (!self.layers[currentLayer]) {
+            self.layers[currentLayer] = { lines: [], polylines: [], texts: [] };
+          }
+          const layerObj = self.layers[currentLayer];
+
+          if (currentEntity === "LINE") {
+            if (xValues.length >= 2 && yValues.length >= 2) {
+              const dx = xValues[1] - xValues[0];
+              const dy = yValues[1] - yValues[0];
+              const length = Math.sqrt(dx*dx + dy*dy);
+              layerObj.lines.push({
+                x1: xValues[0], y1: yValues[0],
+                x2: xValues[1], y2: yValues[1],
+                length: length
+              });
+            }
+          } else if (currentEntity === "LWPOLYLINE" || currentEntity === "POLYLINE") {
+            if (xValues.length >= 2) {
+              const minX = Math.min(...xValues);
+              const maxX = Math.max(...xValues);
+              const minY = Math.min(...yValues);
+              const maxY = Math.max(...yValues);
+              layerObj.polylines.push({
+                minX, maxX, minY, maxY,
+                width: maxX - minX,
+                height: maxY - minY,
+                verticesCount: xValues.length,
+                isClosed: isClosed
+              });
+            }
+          } else if (currentEntity === "TEXT" || currentEntity === "MTEXT") {
+            if (currentText.trim()) {
+              layerObj.texts.push({
+                text: currentText.trim(),
+                x: xValues[0] || 0,
+                y: yValues[0] || 0
+              });
+            }
+          }
+        }
+
+        let groupCode = null;
+        for (let i = 0; i < lines.length; i++) {
+          const line = lines[i].trim();
+          if (i % 2 === 0) {
+            groupCode = parseInt(line, 10);
+          } else {
+            if (groupCode === 0) {
+              // 이전 개체 저장
+              saveEntity();
+
+              // 새로운 개체 감지
+              const entType = line.toUpperCase();
+              if (["LINE", "LWPOLYLINE", "POLYLINE", "TEXT", "MTEXT"].includes(entType)) {
+                currentEntity = entType;
+              } else {
+                currentEntity = null;
+              }
+              currentLayer = "0";
+              currentText = "";
+              xValues = [];
+              yValues = [];
+              isClosed = false;
+            } else if (currentEntity) {
+              if (groupCode === 8) {
+                currentLayer = line;
+              } else if (groupCode === 10 || groupCode === 11) {
+                xValues.push(parseFloat(line));
+              } else if (groupCode === 20 || groupCode === 21) {
+                yValues.push(parseFloat(line));
+              } else if (groupCode === 70) {
+                const flags = parseInt(line, 10);
+                isClosed = (flags & 1) === 1;
+              } else if (groupCode === 1) {
+                currentText = line;
+              }
+            }
+          }
+        }
+        saveEntity(); // 마지막 개체 저장
+
+        // 빈 레이어 제거
+        for (const layer in this.layers) {
+          const l = this.layers[layer];
+          if (l.lines.length === 0 && l.polylines.length === 0 && l.texts.length === 0) {
+            delete this.layers[layer];
+          }
+        }
+
+        return {
+          layers: this.layers,
+          layerCount: Object.keys(this.layers).length,
+          entityCount: this.entityCount
+        };
+      }
+
+      // 레이어 매핑 정보에 기반해 부재 구조체 배열 추출
+      extractMembers(mappings) {
+        const detected = [];
+        let colId = 1, beamId = 1, slabId = 1, wallId = 1, footingId = 1;
+
+        for (const [layer, type] of Object.entries(mappings)) {
+          if (type === "ignore" || !this.layers[layer]) continue;
+
+          const data = this.layers[layer];
+
+          // 1. 기둥 추출 (폐곡선 폴리라인 활용)
+          if (type === "column") {
+            data.polylines.forEach(poly => {
+              let b = Math.round(poly.width);
+              let h = Math.round(poly.height);
+              
+              // mm 단위 스케일 보정
+              if (b < 10) b = Math.round(b * 1000);
+              if (h < 10) h = Math.round(h * 1000);
+
+              // 50mm 단위로 올림/내림 헤베 보정
+              b = Math.max(100, Math.round(b / 50) * 50);
+              h = Math.max(100, Math.round(h / 50) * 50);
+
+              // 주변 텍스트 탐색 (부재명 매핑용)
+              let name = `C${colId++}`;
+              const txt = findNearestText(poly.minX + poly.width/2, poly.minY + poly.height/2, data.texts);
+              if (txt) name = txt;
+
+              detected.push({
+                type: "column",
+                name: name,
+                floor: "1F",
+                b: b,
+                h: h,
+                H: 3.3,
+                count: 1,
+                mainDia: "D22",
+                mainN: 8,
+                tieDia: "D10",
+                tieSp: 200
+              });
+            });
+          }
+
+          // 2. 보 추출 (라인 길이 활용)
+          if (type === "beam") {
+            data.lines.forEach(line => {
+              let len = line.length;
+              if (len > 100) len = len / 1000; // mm -> m
+              len = Number(len.toFixed(2));
+
+              let name = `G${beamId++}`;
+              const txt = findNearestText((line.x1+line.x2)/2, (line.y1+line.y2)/2, data.texts);
+              if (txt) name = txt;
+
+              detected.push({
+                type: "beam",
+                name: name,
+                floor: "1F",
+                b: 400,
+                h: 600,
+                L: len,
+                count: 1,
+                topDia: "D22",
+                topN: 4,
+                botDia: "D22",
+                botN: 3,
+                stDia: "D10",
+                stSp: 200
+              });
+            });
+          }
+
+          // 3. 슬래브 추출 (폴리라인 크기 활용)
+          if (type === "slab") {
+            data.polylines.forEach(poly => {
+              let W = poly.width;
+              let L = poly.height;
+              if (W > 100) W = W / 1000;
+              if (L > 100) L = L / 1000;
+              W = Number(W.toFixed(2));
+              L = Number(L.toFixed(2));
+
+              let name = `S${slabId++}`;
+              const txt = findNearestText(poly.minX + poly.width/2, poly.minY + poly.height/2, data.texts);
+              if (txt) name = txt;
+
+              detected.push({
+                type: "slab",
+                name: name,
+                floor: "1F",
+                W: Math.min(W, L),
+                L: Math.max(W, L),
+                t: 150,
+                count: 1,
+                dia: "D13",
+                sp: 200,
+                doubleLayer: true
+              });
+            });
+          }
+
+          // 4. 벽체 추출 (라인 길이 활용)
+          if (type === "wall") {
+            data.lines.forEach(line => {
+              let len = line.length;
+              if (len > 100) len = len / 1000;
+              len = Number(len.toFixed(2));
+
+              let name = `W${wallId++}`;
+              const txt = findNearestText((line.x1+line.x2)/2, (line.y1+line.y2)/2, data.texts);
+              if (txt) name = txt;
+
+              detected.push({
+                type: "wall",
+                name: name,
+                floor: "1F",
+                L: len,
+                H: 3.3,
+                t: 200,
+                count: 1,
+                vDia: "D13",
+                vSp: 200,
+                hDia: "D10",
+                hSp: 250,
+                doubleFace: true
+              });
+            });
+          }
+
+          // 5. 기초 추출 (폴리라인 외곽)
+          if (type === "footing") {
+            data.polylines.forEach(poly => {
+              let A = poly.width;
+              let B = poly.height;
+              if (A > 100) A = A / 1000;
+              if (B > 100) B = B / 1000;
+              A = Number(A.toFixed(2));
+              B = Number(B.toFixed(2));
+
+              let name = `F${footingId++}`;
+              const txt = findNearestText(poly.minX + poly.width/2, poly.minY + poly.height/2, data.texts);
+              if (txt) name = txt;
+
+              detected.push({
+                type: "footing",
+                name: name,
+                floor: "기초",
+                A: A,
+                B: B,
+                h: 600,
+                count: 1,
+                dia: "D16",
+                sp: 150,
+                doubleLayer: false
+              });
+            });
+          }
+        }
+
+        return detected;
+
+        // 반경 내에 있는 텍스트 찾기 도우미 함수
+        function findNearestText(cx, cy, texts) {
+          if (!texts || texts.length === 0) return null;
+          let bestText = null;
+          let bestDist = Infinity;
+          
+          texts.forEach(t => {
+            const d = Math.sqrt((t.x - cx)*(t.x - cx) + (t.y - cy)*(t.y - cy));
+            // 캐드 유닛 기준 (일반적으로 1500mm = 1.5m 이내에 텍스트가 인접한 것으로 가정)
+            if (d < bestDist && d < 2000) {
+              bestDist = d;
+              bestText = t.text;
+            }
+          });
+          return bestText;
+        }
+      }
+    }
+
+    // 테스트 데모용 DXF 제너레이터
+    function generateDemoDXF() {
+      const lines = [
+        "  0", "SECTION", "  2", "ENTITIES",
+        // Column C1
+        "  0", "LWPOLYLINE", "  8", "S-COL", " 90", "  4", " 70", "  1",
+        " 10", "100.0", " 20", "100.0",
+        " 10", "600.0", " 20", "100.0",
+        " 10", "600.0", " 20", "600.0",
+        " 10", "100.0", " 20", "600.0",
+        "  0", "TEXT", "  8", "S-COL", " 10", "350.0", " 20", "350.0", "  1", "C1",
+        
+        // Column C2
+        "  0", "LWPOLYLINE", "  8", "S-COL", " 90", "  4", " 70", "  1",
+        " 10", "1000.0", " 20", "100.0",
+        " 10", "1500.0", " 20", "100.0",
+        " 10", "1500.0", " 20", "600.0",
+        " 10", "1000.0", " 20", "600.0",
+        "  0", "TEXT", "  8", "S-COL", " 10", "1250.0", " 20", "350.0", "  1", "C2",
+
+        // Beam G1 (Length = 8m)
+        "  0", "LINE", "  8", "S-BEAM",
+        " 10", "2000.0", " 20", "2000.0",
+        " 11", "10000.0", " 21", "2000.0",
+        "  0", "TEXT", "  8", "S-BEAM", " 10", "6000.0", " 20", "2100.0", "  1", "G1",
+
+        // Beam G2 (Length = 6m)
+        "  0", "LINE", "  8", "S-BEAM",
+        " 10", "2000.0", " 20", "3000.0",
+        " 11", "8000.0", " 21", "3000.0",
+        "  0", "TEXT", "  8", "S-BEAM", " 10", "5000.0", " 20", "3100.0", "  1", "G2",
+
+        // Slab S1 (6m x 8m)
+        "  0", "LWPOLYLINE", "  8", "S-SLAB", " 90", "  4", " 70", "  1",
+        " 10", "2000.0", " 20", "4000.0",
+        " 10", "8000.0", " 20", "4000.0",
+        " 10", "8000.0", " 20", "12000.0",
+        " 10", "2000.0", " 20", "12000.0",
+        "  0", "TEXT", "  8", "S-SLAB", " 10", "5000.0", " 20", "8000.0", "  1", "S1",
+
+        "  0", "ENDSEC", "  0", "EOF"
+      ];
+      return lines.join("\n");
+    }
+
+    // ────────────────────────────────────────────────────────
+    // 8. DXF 파싱 및 화면 제어 이벤트 핸들러
+    // ────────────────────────────────────────────────────────
+    
+    // DXF 분석 결과 처리
+    function processParsedDXF(result) {
+      document.getElementById("dxf-layer-count").textContent = result.layerCount;
+      document.getElementById("dxf-entity-count").textContent = result.entityCount;
+
+      // 레이어 매핑 컨테이너 초기화 및 드로잉
+      const container = document.getElementById("dxf-layer-mapping-container");
+      container.innerHTML = "";
+
+      Object.keys(result.layers).forEach(layerName => {
+        const data = result.layers[layerName];
+        const row = document.createElement("div");
+        row.className = "dxf-mapping-row";
+
+        // Heuristic 기본 매핑값 추천
+        let defaultMap = "ignore";
+        const upper = layerName.toUpperCase();
+        if (upper.includes("COL") || upper.includes("COLUMN") || upper.includes("기둥")) defaultMap = "column";
+        else if (upper.includes("BEAM") || upper.includes("보") || upper.includes("GIRDER")) defaultMap = "beam";
+        else if (upper.includes("SLAB") || upper.includes("슬래브") || upper.includes("PLATE")) defaultMap = "slab";
+        else if (upper.includes("WALL") || upper.includes("벽체")) defaultMap = "wall";
+        else if (upper.includes("FOOT") || upper.includes("기초") || upper.includes("FOUND")) defaultMap = "footing";
+
+        row.innerHTML = `
+          <div class="dxf-mapping-layer-name" title="${layerName}">
+            ${layerName} <span style="color:var(--text-dim);">(${data.lines.length + data.polylines.length}개)</span>
+          </div>
+          <select class="dxf-mapping-select" data-layer="${layerName}">
+            <option value="ignore" ${defaultMap === "ignore" ? "selected" : ""}>제외</option>
+            <option value="column" ${defaultMap === "column" ? "selected" : ""}>기둥(C)</option>
+            <option value="beam" ${defaultMap === "beam" ? "selected" : ""}>보(G)</option>
+            <option value="slab" ${defaultMap === "slab" ? "selected" : ""}>슬래브(S)</option>
+            <option value="wall" ${defaultMap === "wall" ? "selected" : ""}>벽체(W)</option>
+            <option value="footing" ${defaultMap === "footing" ? "selected" : ""}>기초(F)</option>
+          </select>
+        `;
+        container.appendChild(row);
+      });
+
+      // 요약 구역 펼치기, 검출 구역 숨기기
+      document.getElementById("dxf-summary-section").classList.remove("hidden");
+      document.getElementById("dxf-detected-section").classList.add("hidden");
+    }
+
+    // 부재 추출 실행
+    function executeExtraction() {
+      if (!dxfParserInstance) return;
+
+      // 현재 셀렉트 매핑 읽기
+      const mappings = {};
+      document.querySelectorAll(".dxf-mapping-select").forEach(select => {
+        mappings[select.dataset.layer] = select.value;
+      });
+
+      // 부재 추출 수행
+      parsedDetectedMembers = dxfParserInstance.extractMembers(mappings);
+
+      // 검출 목록 UI 생성
+      const tbody = document.getElementById("dxf-detected-tbody");
+      tbody.innerHTML = "";
+      document.getElementById("dxf-detected-count").textContent = parsedDetectedMembers.length;
+
+      if (parsedDetectedMembers.length === 0) {
+        tbody.innerHTML = `<tr><td colspan="4" class="text-center" style="padding: 1rem; color: var(--text-dim);">검출 조건에 부합하는 도형 데이터가 없습니다.</td></tr>`;
+        document.getElementById("btn-import-detected").disabled = true;
+      } else {
+        document.getElementById("btn-import-detected").disabled = false;
+        parsedDetectedMembers.forEach((m, idx) => {
+          const meta = TYPE_META[m.type];
+          
+          let specStr = "";
+          if (m.type === "column") specStr = `${m.b}x${m.h}`;
+          else if (m.type === "beam") specStr = `L:${m.L}m`;
+          else if (m.type === "slab") specStr = `${m.W}x${m.L}m`;
+          else if (m.type === "wall") specStr = `L:${m.L}m`;
+          else if (m.type === "footing") specStr = `${m.A}x${m.B}m`;
+
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td style="text-align: center; padding: 0.4rem 0.5rem;">
+              <input type="checkbox" class="chk-detected-item" data-index="${idx}" checked>
+            </td>
+            <td style="padding: 0.4rem 0.5rem; font-weight:600;">${m.name}</td>
+            <td style="padding: 0.4rem 0.5rem;"><span class="member-badge ${meta.colorClass}" style="margin:0; width:1.2rem; height:1.2rem; font-size:0.65rem;">${meta.short}</span></td>
+            <td style="padding: 0.4rem 0.5rem; text-align: right; font-family: var(--font-mono);">${specStr}</td>
+          `;
+          tbody.appendChild(tr);
+        });
+      }
+
+      document.getElementById("dxf-detected-section").classList.remove("hidden");
+    }
+
+    // 선택 부재 메인 물량 테이블에 추가
+    function importDetectedMembers() {
+      const checkedBoxes = document.querySelectorAll(".chk-detected-item:checked");
+      if (checkedBoxes.length === 0) {
+        alert("추가할 부재를 선택해 주세요.");
+        return;
+      }
+
+      checkedBoxes.forEach(box => {
+        const idx = parseInt(box.dataset.index, 10);
+        const member = parsedDetectedMembers[idx];
+        
+        // 메인 리스트 상태에 삽입
+        state.members.push({
+          ...member,
+          id: state.nextId++
+        });
+      });
+
+      // 리셋 및 갱신
+      document.getElementById("dxf-summary-section").classList.add("hidden");
+      document.getElementById("dxf-detected-section").classList.add("hidden");
+      alert(`${checkedBoxes.length}개의 부재를 적산 리스트에 성공적으로 가져왔습니다.`);
+      
+      render();
+    }
+
+    // ────────────────────────────────────────────────────────
+    // 9. 이벤트 바인딩 및 초기화
+    // ────────────────────────────────────────────────────────
+    
+    // 폼 공통 이름/층 동기화
+    document.getElementById("field-name").addEventListener("input", (e) => {
+      state.form.name = e.target.value;
+    });
+    document.getElementById("field-floor").addEventListener("input", (e) => {
+      state.form.floor = e.target.value;
+    });
+
+    // 부재 탭 버튼 바인딩
+    document.getElementById("type-selector").addEventListener("click", (e) => {
+      const btn = e.target.closest(".type-tab-btn");
+      if (!btn) return;
+      
+      document.querySelectorAll(".type-tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      
+      switchType(btn.dataset.type);
+    });
+
+    // 폼 등록 버튼 바인딩
+    document.getElementById("btn-submit").addEventListener("click", submitForm);
+    document.getElementById("btn-cancel-edit").addEventListener("click", cancelEdit);
+
+    // 할증률 실시간 바인딩
+    const wasteConcInput = document.getElementById("waste-conc");
+    const wasteFormInput = document.getElementById("waste-form");
+    const wasteRebarInput = document.getElementById("waste-rebar");
+
+    wasteConcInput.addEventListener("input", (e) => {
+      state.waste.conc = Number(e.target.value) || 0;
+      renderTotals();
+      renderSummary();
+    });
+    wasteFormInput.addEventListener("input", (e) => {
+      state.waste.form = Number(e.target.value) || 0;
+      renderTotals();
+      renderSummary();
+    });
+    wasteRebarInput.addEventListener("input", (e) => {
+      state.waste.rebar = Number(e.target.value) || 0;
+      renderTotals();
+      renderSummary();
+    });
+
+    // 집계표 탭 바인딩
+    document.querySelector(".summary-tabs").addEventListener("click", (e) => {
+      const btn = e.target.closest(".sum-tab-btn");
+      if (!btn) return;
+
+      document.querySelectorAll(".sum-tab-btn").forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+
+      state.activeTab = btn.dataset.tab;
+      renderSummary();
+    });
+
+    // 엑셀 내보내기 바인딩
+    document.getElementById("btn-export").addEventListener("click", exportExcel);
+
+    // ── DXF 파일 업로드 드래그앤드롭 제어 ──
+    const dropZone = document.getElementById("dxf-drop-zone");
+    const fileInput = document.getElementById("dxf-file-input");
+
+    dropZone.addEventListener("click", () => fileInput.click());
+
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("dragover");
+    });
+
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        handleDXFFile(files[0]);
+      }
+    });
+
+    fileInput.addEventListener("change", (e) => {
+      if (e.target.files.length > 0) {
+        handleDXFFile(e.target.files[0]);
+      }
+    });
+
+    function handleDXFFile(file) {
+      if (!file.name.toLowerCase().endsWith(".dxf")) {
+        alert("DXF (*.dxf) 파일 포맷만 업로드 가능합니다.");
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = function(e) {
+        const text = e.target.result;
+        dxfParserInstance = new HeuristicDXFParser();
+        const summary = dxfParserInstance.parse(text);
+        processParsedDXF(summary);
+      };
+      reader.readAsText(file);
+    }
+
+    // 데모용 DXF 생성 시뮬레이션 테스트 실행
+    document.getElementById("btn-demo-dxf").addEventListener("click", () => {
+      const demoDXF = generateDemoDXF();
+      dxfParserInstance = new HeuristicDXFParser();
+      const summary = dxfParserInstance.parse(demoDXF);
+      processParsedDXF(summary);
+      alert("데모용 가상 DXF 도면 정보가 정상적으로 로드되었습니다! 아래에서 매핑 설정을 완료한 후 '부재 파싱 실행'을 클릭해 주세요.");
+    });
+
+    // Heuristic 추출 이벤트 바인딩
+    document.getElementById("btn-extract-dxf").addEventListener("click", executeExtraction);
+
+    // 임시 추출물 전체선택 체크박스
+    document.getElementById("chk-all-detected").addEventListener("change", (e) => {
+      const checked = e.target.checked;
+      document.querySelectorAll(".chk-detected-item").forEach(chk => chk.checked = checked);
+    });
+
+    // 메인 리스트 가져오기
+    document.getElementById("btn-import-detected").addEventListener("click", importDetectedMembers);
+
+    // 초기 구동
+    render();
+  </script>
+</body>
+</html>
